@@ -1,0 +1,91 @@
+#!/bin/bash
+
+# ---------------------
+# Demo of Project Logger CLI
+# ---------------------
+
+echo "==> Signing up advisor1 (will prompt for password)..."
+plogger signup -u advisor1 -n "Alice Advisor" -r advisor
+echo "==> Logging out advisor1..."
+plogger logout
+
+echo "==> Signing up advisor2 (will prompt for password)..."
+plogger signup -u advisor2 -n "Bob Supervisor" -r advisor
+echo "==> Logging out advisor2..."
+plogger logout
+
+echo "==> Signing up user1 (will prompt for password)..."
+plogger signup -u user1 -n "Charlie Contributor" -r user
+echo "==> Logging out user1..."
+plogger logout
+
+echo "==> Signing up user2 (will prompt for password)..."
+plogger signup -u user2 -n "Dana Developer" -r user
+echo "==> Logging out user2..."
+plogger logout
+
+# Advisor 1 logs in
+echo "==> Advisor1 logging in..."
+plogger login -u advisor1
+
+# Create projects
+echo "==> Advisor1 creating projects..."
+plogger add-project -n "Glass Fracture Simulation" -g 20
+plogger add-project -n "Thin Film Analysis" -g 15
+
+# View all projects
+echo "==> Viewing all projects..."
+plogger view-projects
+
+# Assign users to projects
+echo "==> Assigning users to projects..."
+plogger assign-user -i 1 -u user1
+plogger assign-user -i 1 -u user2 --supervisor
+plogger assign-user -i 2 -u user2
+
+# View team for project 1
+echo "==> Viewing team for project 1..."
+plogger view-team -i 1
+
+# Advisor logout
+echo "==> Advisor1 logging out..."
+plogger logout
+
+# User1 logs in and clocks into project 1
+echo "==> User1 logging in and clocking into project 1..."
+plogger login -u user1
+plogger clock-in -i 1
+sleep 2  # Simulate working
+plogger clock-out -i 1
+plogger logout
+
+# User2 logs in and clocks into project 1
+echo "==> User2 logging in and clocking into project 1..."
+plogger login -u user2
+plogger clock-in -i 1
+sleep 2
+plogger clock-out -i 1
+plogger logout
+
+# Advisor1 logs back in
+echo "==> Advisor1 logging back in..."
+plogger login -u advisor1
+
+# View team again (now with time worked)
+echo "==> Viewing updated team with time logs for project 1..."
+plogger view-team -i 1
+
+# Check goal for project 1
+echo "==> Checking weekly goal progress for project 1..."
+plogger check-goal -i 1
+
+# View personal logs
+echo "==> Advisor1 viewing their own logs (should be empty)..."
+plogger view-logs
+
+# Advisor logout
+echo "==> Advisor1 logging out..."
+plogger logout
+
+echo "==> Demo complete."
+

@@ -1,0 +1,154 @@
+#!/bin/bash
+
+# Enforce running as root
+if [ "$EUID" -ne 0 ]; then
+  echo "Please run as root using sudo."
+  exit 1
+fi
+
+# Default values
+DB_NAME="projectlogdb"
+DB_USER="projectlogger"  # Default username
+DB_PASS=""
+PREFIX="/usr/local/projectlogger"  # Default installation prefix
+CLEAN_MODE=false
+
+# Help message function
+show_help() {
+  echo "Installer file for project logger application."
+  echo "Usage: sudo ./configure [OPTIONS]"
+  echo ""
+  echo "Options:"
+  echo "  --db_user=USERNAME, -u=USERNAME    Set the database username to create or delete (default: projectlogger)"
+  echo "  --user_pass=PASSWORD, -p=PASSWORD   Set the new database user password (required unless using --clean)"
+  echo "  --prefix=PATH                       Set the installation directory prefix (default: /usr/local/projectlogger)"
+  echo "  --clean, -c                         Delete the specified database user instead of creating"
+  echo "  --help, -h                          Display this help message"
+  echo "  --python_path=PATH                  Specify custom Python interpreter path (default: autodetect using 'which python3')"
+
+  echo ""
+  echo "Examples:"
+  echo "  Install (default user):"
+  echo "    sudo ./configure --user_pass=mypass"
+  echo ""
+  echo "  Install with custom user and prefix:"
+  echo "    sudo ./configure --db_user=myuser --user_pass=mypass --prefix=/opt/myapp"
+  echo ""
+  echo "  Clean (delete user):"
+  echo "    sudo ./configure --db_user=myuser --clean"
+  echo ""
+  echo "  Install with custom Python:"
+  echo "    sudo ./configure --user_pass=mypass --python_path=/usr/bin/python3.11"
+
+  exit 0
+}
+
+# Parse arguments
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        --db_user=*|-u=*) DB_USER="${1#*=}";;
+        --user_pass=*|-p=*) DB_PASS="${1#*=}";;
+        --prefix=*) PREFIX="${1#*=}";;
+        --clean|-c) CLEAN_MODE=true;;
+        --help|-h) show_help;;
+        --python_path=*) PYTHON_PATH="${1#*=}";;
+        *) echo "Unknown parameter passed: $1"; show_help;;
+    esac
+    shift
+done
+
+if [[ -n "$SUDO_USER" ]]; then
+    # Find real user's home
+    USER_HOME=$(eval echo "~$SUDO_USER")
+else
+    # Not running under sudo? Use current HOME
+    USER_HOME="$HOME"
+fi
+
+# Expand ~ to home directory if used in prefix
+PREFIX="${PREFIX/#\~/$USER_HOME}/projectlogger"
+
+# If python path not specified, detect automatically
+if [[ -z "$PYTHON_PATH" ]]; then
+    PYTHON_PATH=$(which python3)
+    if [[ -z "$PYTHON_PATH" ]]; then
+        echo "Error: python3 not found in PATH and --python_path not specified."
+        exit 1
+    fi
+fi
+
+# Install required Python packages
+echo "Installing Python dependencies using $PYTHON_PATH..."
+
+if [ ! -f requirements.txt ]; then
+    echo "Error: requirements.txt not found in the current directory."
+    exit 1
+fi
+
+"$PYTHON_PATH" -m pip install -r requirements.txt
+
+# Validate arguments
+if [[ "$CLEAN_MODE" = false && -z "$DB_PASS" ]]; then
+  echo "Error: --user_pass or -p must be specified unless using --clean."
+  show_help
+fi
+
+# Now perform the action
+if [[ "$CLEAN_MODE" = true ]]; then
+  echo "Deleting database user '$DB_USER'..."
+  mysql -u root <<EOF
+DROP USER IF EXISTS '$DB_USER'@'localhost';
+FLUSH PRIVILEGES;
+EOF
+  echo "Database user '$DB_USER' deleted (if existed)."
+  exit 0
+fi
+
+# Otherwise, continue installing
+echo "Setting up MariaDB database '$DB_NAME' and user '$DB_USER'..."
+mysql -u root <<EOF
+CREATE DATABASE IF NOT EXISTS \`$DB_NAME\`;
+CREATE USER IF NOT EXISTS '$DB_USER'@'localhost' IDENTIFIED BY '$DB_PASS';
+GRANT SELECT, INSERT, UPDATE, DELETE ON \`$DB_NAME\`.* TO '$DB_USER'@'localhost';
+FLUSH PRIVILEGES;
+EOF
+
+# Load the schema
+echo "Loading database schema..."
+mysql -u root $DB_NAME < init_schema.sql
+
+# Create config directory
+echo "Creating configuration at prefix '$PREFIX'..."
+mkdir -p "$PREFIX/config"
+
+# Write config file
+CONFIG_FILE="$PREFIX/config/db_config.cfg"
+
+echo "python_path=$PYTHON_PATH" >> "$CONFIG_FILE"
+
+# Lock permissions on config file
+chmod 644 "$CONFIG_FILE"
+
+echo "Creating enviroment variables to store database authentification securely..."
+
+ENV_FILE="$PREFIX/config/.env"
+
+chmod 644 "$ENV_FILE"
+
+echo "DB_USER=$DB_USER" >> "$ENV_FILE"
+echo "DB_PASS=$DB_PASS" >> "$ENV_FILE"
+echo "DB_NAME=$DB_NAME" >> "$ENV_FILE"
+
+echo "Installing plogger executable..."
+
+# Create a new executable with correct shebang
+echo "#!$PYTHON_PATH" > "$PREFIX/plogger"
+cat plogger.py >> "$PREFIX/plogger"
+
+# Make it executable
+chmod 755 "$PREFIX/plogger"
+
+echo "Installation complete."
+echo ""
+echo "Configuration saved to: $CONFIG_FILE"
+echo "Executable application: $PREFIX/plogger"
