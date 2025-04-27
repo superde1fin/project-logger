@@ -90,7 +90,7 @@ Project Logger is a command-line application designed for research teams to secu
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/project-logger.git
+   git clone https://github.com/superde1fin/project-logger.git
    cd project-logger
    ```
 
