@@ -123,13 +123,13 @@ def signup_handler(args):
     login_handler(args, from_signup = True)
 
 def login_handler(args, from_signup = False):
+    username = args.username
     if not from_signup:
         user = check_logged_in()
         if user:
             print(f"You are already logged in as {user['username']}")
             return
 
-        username = args.username
         password = getpass.getpass(prompt="Enter your password: ")
         print(f"Logging in {username}")
 
